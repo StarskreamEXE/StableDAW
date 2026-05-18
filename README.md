@@ -1,212 +1,256 @@
-# Stable Audio 3
+# Stable Audio 3 — StableDAW fork
 
-**A state-of-the-art open platform for fast, high-quality generated audio and music.** 
+A state-of-the-art open platform for fast, high-quality generated audio and music — with a custom FastAPI backend and React UI layered on top of the upstream Stable Audio 3 Python pipeline.
 
-TBD Paper/blog links
+> **This fork's deliverables (in addition to upstream):**
+> - `backend/server.py` — a FastAPI wrapper exposing async generation jobs, studio effects, and library/training stubs.
+> - `frontend/` — the StableDAW React 19 + Vite 6 + Tailwind 4 UI with CREATE / EDIT / TRAIN / LIBRARY tabs, persistent IndexedDB library, real Web Audio step sequencer, and a live processing log.
+> - The complete in-app **[User Guide](docs/USER_GUIDE.md)** — the source of truth for every feature.
 
-<a href="https://discord.gg/cKpvjey8b"><img alt="Join us on Discord" src="https://img.shields.io/discord/823813159592001537?color=5865F2&logo=discord&logoColor=white"></a>
+[Discord](https://discord.gg/cKpvjey8b) · [User Guide](docs/USER_GUIDE.md) · [Polish Plan](docs/plans/2026-05-18-stabledaw-ui-polish-and-functionality.md)
 
+---
 
-Stable Audio 3 is the next generation of Stable Audio: a focused, streamlined platform for inference and fine-tuning, built on lessons from [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools). If you're doing foundational research or working with previous Stable Audio models, that repo is still the place to go.
+## Quick links
 
+| If you want to… | Go to |
+|---|---|
+| **See every feature in detail** | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) |
+| Install and run | [§3–§4 of the User Guide](docs/USER_GUIDE.md#3-installation) |
+| Read the backend API reference | [§13 of the User Guide](docs/USER_GUIDE.md#13-backend-api-reference) |
+| Read the Python pipeline reference | [§14 of the User Guide](docs/USER_GUIDE.md#14-python-pipeline-reference) |
+| Troubleshoot | [§16 of the User Guide](docs/USER_GUIDE.md#16-troubleshooting) |
+
+The in-app **Docs** button (gear-adjacent in the top-right of the DAW header) opens the User Guide as an interactive modal with PDF export.
+
+---
+
+## What it does
+
+Stable Audio 3 generates 44.1 kHz stereo audio from text prompts. Three modes:
+
+- **Text-to-audio** — prompt in, audio out.
+- **Audio-to-audio** — restyle a source clip with a prompt + `init_noise_level`.
+- **Inpainting / continuation** — regenerate a time window inside a clip, or extend the tail past the source's end.
+
+Plus:
+
+- **LoRA fine-tuning** — adapt any model to a target style; stackable, adjustable at runtime.
+- **Standalone SAME autoencoder** — encode audio to 256-dim latents at 1/4096 the original rate; decode them back.
+- **Variable-length generation** — duration determines the latent sequence length directly, no wasted compute on padding.
+- **FFmpeg-based studio chain** — 24 effects covering mastering, dynamics, EQ, pitch, fade, denoise, format conversion.
+- **Persistent IndexedDB library** — every generation auto-saves with full metadata; survives reloads.
+- **Web Audio step sequencer** — 16-step drum machine with hand-rolled kick/snare/hat/tone/noise voices.
+- **Live processing log** — per-source, per-level, downloadable as text.
 
 ---
 
 ## Models
 
-| RF Model | Autoencoder | Hardware | Params | Max length | Use case |
+| Key | Type | Params | Hardware | Max length | Use case |
 |---|---|---|---|---|---|
-| **Stable Audio 3 Small** | SAME-Small | CPU | 433M | 120s | Lightweight inference, no GPU required |
-| **Stable Audio 3 Medium** | SAME-Large | GPU (CUDA) | 1.4B | 380s | High Quality, Fast Inference |
-| **Stable Audio 3 Large** | SAME-Large | API only | 2.7B | 380s | Highest quality, API only. Not supported by this repo, see the [API docs](#) |
+| `small` | ARC | 433M | CPU | 120 s | Lightweight inference, no GPU. |
+| `medium` | ARC | 1.4B | CUDA | 380 s | Primary inference path. |
+| `small-rf` | RF | 433M | CPU | 120 s | LoRA training base (small). |
+| `medium-rf` | RF | 1.4B | CUDA | 380 s | LoRA training base (medium). |
+| `same-s` | Autoencoder | 266M | CPU | — | Standalone SAME-Small. |
+| `same-l` | Autoencoder | 1.7B | CUDA | — | Standalone SAME-Large. |
+| Large | ARC | 2.7B | API only | 380 s | Not supported by this repo. |
+
+ARC checkpoints are 8-step post-trained models. RF checkpoints are the base rectified-flow weights used for fine-tuning; inference with them needs ~50 steps and `cfg_scale=7`.
+
 ---
-
-## Features
-- ⚡ **Fast, state-of-the-art generation** - Generate minutes of audio in milliseconds
-- 🎛️ **Three inference modes** — text-to-audio, audio-to-audio editing, and inpainting/continuation
-- ↔️ **Variable-length generation** — handles generation of a variety of sequences without wasting inference on unused latents
-- 🎯 **Personalization through LoRA fine-tuning** — adapt any model to a target style; stackable, adjustable at runtime
-- 💻 **Broad hardware support** — CPU (Small), CUDA/TensorRT (Medium), Apple Silicon via MLX/CoreML, Intel via OpenVINO
-- 🎵 **SAME autoencoder** — new Semantic-Acoustic Music Encoder; stereo, 44.1 kHz, 256-dimensional latents optimized for both generative tractability and high-quality reconstruction
-
 
 ## Installation
 
-Stable Audio 3 uses [uv](https://github.com/astral-sh/uv) for fast, lightweight installs. Install only what you need.
+### Base (CPU, Small model)
 
 ```bash
-# Base install
 uv sync
-
-# With CUDA support
-uv sync --extra cuda
-
-# With Gradio UI
-uv sync --extra ui
-
-# Multiple extras
-uv sync --extra cuda --extra ui
 ```
 
-### Flash Attention
-Stable Audio 3 Medium requires [Flash Attention](https://github.com/Dao-AILab/flash-attention), follow the instructions from there to install.
+### With CUDA (Medium model)
 
-## Quick Start
+```bash
+uv sync --extra cuda
+```
 
-Launch the Gradio UI:
+### Frontend
+
+```bash
+cd frontend && npm install
+```
+
+### Windows-specific
+
+PyTorch's CUDA index is Linux-only in `pyproject.toml`. On Windows, install torch + soundfile + flash-attention manually — see [User Guide §3](docs/USER_GUIDE.md#3-installation).
+
+---
+
+## Launching
+
+### One-shot (Windows)
+
+```powershell
+.\start-dev.bat
+```
+
+Starts the backend on :8600, the Vite dev server on :5173, and opens the browser. Hot-reloads both sides.
+
+### Manual
+
+```bash
+# Terminal 1
+uv run uvicorn backend.server:app --host 0.0.0.0 --port 8600 --reload
+
+# Terminal 2
+cd frontend && npm run dev
+```
+
+Visit http://localhost:5173.
+
+### Legacy Gradio UI
 
 ```bash
 uv run python run_gradio.py --model medium
-```
-
-This starts a local web interface with a shareable link. To load a LoRA checkpoint:
-
-```bash
 uv run python run_gradio.py --model medium --lora-ckpt-path path/to/lora.ckpt
 ```
 
-## Usage
+---
 
-Stable Audio 3 supports several inference modes. For full details, see [Inference Methods](docs/workflows/inference.md).
-
-**Text-to-Audio** — Generate audio from a text prompt:
+## Quick examples (Python)
 
 ```python
 from stable_audio_3 import StableAudioPipeline
 
 pipe = StableAudioPipeline.from_pretrained("medium")
-audio = pipe.generate(
-    prompt="Lo-fi boom bap meets orchestral strings 84 BPM",
-    duration=180,
-)
-```
 
-**Audio-to-Audio** — Edit an existing recording using a prompt to steer style and mood:
+# Text-to-audio
+audio = pipe.generate(prompt="Lo-fi boom bap, 84 BPM", duration=180)
 
-```python
+# Audio-to-audio
 import torchaudio
-from stable_audio_3 import StableAudioPipeline
-
-pipe = StableAudioPipeline.from_pretrained("medium")
 init_audio = torchaudio.load("/path/to/audio.wav")
-audio = pipe.generate(
-    init_audio=init_audio,
-    init_noise_level=0.9,
-    prompt="bossa nova bassline",
-    duration=30,
-)
-```
+audio = pipe.generate(init_audio=init_audio, init_noise_level=0.9,
+                      prompt="bossa nova bassline", duration=30)
 
-**Inpainting / Continuation** — Regenerate a specific region of an audio file while keeping the rest intact:
-
-```python
-import torchaudio
-from stable_audio_3 import StableAudioPipeline
-
-pipe = StableAudioPipeline.from_pretrained("medium")
-
+# Inpainting
 inpaint_audio = torchaudio.load("/path/to/audio.wav")
-audio = pipe.generate(
-    inpaint_audio=inpaint_audio,
-    inpaint_mask_start_seconds=4.0,
-    inpaint_mask_end_seconds=8.0,
-    prompt="punchy kick drum fill",
-    duration=30,
-)
+audio = pipe.generate(inpaint_audio=inpaint_audio,
+                      inpaint_mask_start_seconds=4.0,
+                      inpaint_mask_end_seconds=8.0,
+                      prompt="punchy kick drum fill", duration=30)
 ```
 
-To extend an audio clip (continuation), set `inpaint_mask_start_seconds` to the length of the source file and choose a longer `duration`. See [Inference Methods](docs/workflows/inference.md) for the full controls reference.
+See the [User Guide §14](docs/USER_GUIDE.md#14-python-pipeline-reference) for advanced controls (samplers, distribution-shift schedules, APG, RF-Inversion, autoencoder workflows).
 
+---
 
-**Encoding / Decoding** — Use the autoencoder directly to encode audio to latents or decode latents back to audio:
+## UI feature surface
 
-```python
-import torchaudio
-from stable_audio_3 import AutoencoderPipeline
+The StableDAW React UI is the daily-driver interface. Top-level tabs:
 
-ae = AutoencoderPipeline.from_pretrained("same-l")
-waveform, sr = torchaudio.load("audio.wav")
-latents = ae.encode(waveform, sr)
-audio_out = ae.decode(latents)
+| Tab | What it does | Status |
+|---|---|---|
+| **CREATE** | Text-to-audio with init signal, inpainting, LoRA stack, generation parameters, sticky RUN button, output preview. | ✅ Full |
+| **EDIT** | 24 FFmpeg-based studio effects driven by four macro sliders. Source upload, output format selector, process history. | ✅ Full |
+| **TRAIN** | LoRA training, autoencoder round-trip, dataset pre-encode. UI scaffolded; backend endpoints stubbed in this fork (501). | 🟡 UI only |
+| **LIBRARY** | Persistent IndexedDB-backed catalog of every generation. Search, filter, sort, favorite, play, download, delete, stats. | ✅ Full |
+
+DAW workspace (center panel, persistent across tabs):
+
+| Component | Status |
+|---|---|
+| Step Sequencer (Web Audio, 5 voices, BPM clock) | ✅ Full |
+| Waveform Editor (multi-track scaffolding, transport, COMMIT EDIT) | 🟡 Scaffolding — clip drag/cut/save not wired yet |
+| Spectral analyzer (collapsible, restorable) | ✅ UI live, real-audio FFT staged |
+| Processing log (left-column footer, downloadable) | ✅ Full |
+| Player footer (track info, transport, volume) | ✅ Volume routed via `usePlaybackStore` |
+
+See [User Guide §5–§12](docs/USER_GUIDE.md#5-ui-walkthrough--shell) for every control on every screen.
+
+---
+
+## Backend API (summary)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Liveness + model_loaded boolean. |
+| `GET` | `/api/model-info` | Active model, sample rate, VRAM. |
+| `POST` | `/api/generate-jobs` | Async generation submit (returns `{job:{id}}`). |
+| `GET` | `/api/jobs/{id}` | Poll job status / result. |
+| `GET` | `/api/jobs` | List all jobs. |
+| `POST` | `/api/generate` | Sync generation (legacy, used by Gradio UI). |
+| `POST` | `/api/studio/process` | FFmpeg effect pipeline. |
+| `POST` | `/api/jobs/train-lora` | 501 in this fork. |
+| `POST` | `/api/jobs/pre-encode` | 501 in this fork. |
+| `POST` | `/api/autoencoder/encode` | 501 in this fork. |
+| `POST` | `/api/autoencoder/decode` | 501 in this fork. |
+| `GET` | `/api/autoencoder/info` | Stub (empty arrays). |
+| `GET` | `/api/presets` | Empty list. |
+| `POST` | `/api/presets` | Returns a fake id (no persistence). |
+
+Full request/response shapes in [User Guide §13](docs/USER_GUIDE.md#13-backend-api-reference).
+
+---
+
+## Architecture
+
+```
+Browser  ─── /api/* ──▶  FastAPI backend  ──▶  StableAudioPipeline
+                                                    ├── T5Gemma text encoder
+                                                    ├── DiT diffusion transformer
+                                                    └── SAME autoencoder
 ```
 
-See [Autoencoder Workflows](docs/workflows/autoencoder.md) for encoding batches, chunked processing, and pre-encoding datasets for LoRA training.
+Same-origin in production (FastAPI mounts the built `frontend/dist`); split-dev in development (Vite on 5173 proxies `/api` to backend on 8600).
 
-## Hardware Support
+---
 
-*COMING SOON*
+## Development
 
-Stable Audio 3 scales from a laptop to a multi-GPU server. Specify your backend at load time:
+```bash
+# Python lint
+uv run ruff check
+uv run ruff format --check
 
-```python
-model = StableAudioPipeline.from_pretrained(
-    "medium",
-    backend="tensorrt"  # or "mlx", "coreml", "openvino"
-)
+# Tests (medium tests skip on non-CUDA)
+uv run pytest
+uv run pytest --save-audio    # persist outputs to test_audio_outputs/
+
+# Frontend build
+cd frontend && npm run build
+
+# Regenerate docs (runs on commit via pre-commit hook)
+./scripts/regenerate-docs.sh        # macOS/Linux
+.\scripts\regenerate-docs.ps1       # Windows
 ```
 
-
-### Inference Times
-
-TBD
+The pre-commit hook is installed by running `./scripts/install-hooks.sh` once. It re-validates the frontend build, refreshes the docs timestamp, takes Playwright screenshots if Playwright is available, and stages the updated docs.
 
 ---
 
 ## Docs
 
-| Guide | Description |
-|-------|-------------|
-| [Inference Methods](docs/workflows/inference.md) | Overview of inference modes (text-to-audio, inpainting, etc.) |
-| [LoRA Training](docs/workflows/lora.md) | Fine-tune with LoRA: setup, training loop, and checkpointing |
-| [Autoencoder Workflows](docs/workflows/autoencoder.md) | Encode and decode audio with the VAE directly |
-| [Prompting Guide](docs/guides/prompting.md) | Prompt and control signal reference |
-| [Model Overview](docs/guides/model-overview.md) | Architecture and design overview |
+| File | What's in it |
+|---|---|
+| **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** | The full manual — every feature, every control, every endpoint. The in-app Docs button renders this. |
+| [docs/plans/](docs/plans/) | Planning documents for ongoing work. |
+| [docs/workflows/inference.md](docs/workflows/inference.md) | Inference-mode reference (upstream). |
+| [docs/workflows/lora.md](docs/workflows/lora.md) | LoRA training walkthrough (upstream). |
+| [docs/workflows/autoencoder.md](docs/workflows/autoencoder.md) | Autoencoder workflows (upstream). |
+| [docs/guides/prompting.md](docs/guides/prompting.md) | Prompt and control-signal reference (upstream). |
+| [docs/guides/model-overview.md](docs/guides/model-overview.md) | Architecture and design (upstream). |
+| [docs/windows/setup-guide.md](docs/windows/setup-guide.md) | Full Windows setup walkthrough. |
 
 ---
 
 ## Community
 
-Join our [Discord](https://discord.gg/cKpvjey8b) for updates, help, and discussions. We host weekly office hours talking all things AI audio.
-
----
-
-## Troubleshooting
-
-#### Output audio is a static glitch sound (affects Stable Audio 3 Medium-only)
-
-Likely an issue with flash-attention. Please make sure flash attention is installed correctly.
-You can check with
-
-```
-uv run python -c "import flash_attn; from flash_attn import flash_attn_func; print('Version:', flash_attn.__version__, '| flash_attn_func:', flash_attn_func)"
-```
-
-if there are errors in any of this, `flash_attn` is not installed correctly.
+Join the [Discord](https://discord.gg/cKpvjey8b) for updates, help, and discussions.
 
 ---
 
 ## License
 
-To use these models commercially, please refer to the 
-[Stability AI Community License](https://stability.ai/license)
-
-
-## Testing
-
-Install dev dependencies:
-
-```bash
-uv sync --group dev
-```
-
-Run the test suite:
-
-```bash
-uv run pytest
-```
-
-Save generated audio outputs to `test_audio_outputs/` for manual inspection:
-
-```bash
-uv run pytest --save-audio
-```
+To use these models commercially, refer to the [Stability AI Community License](https://stability.ai/license).

@@ -290,10 +290,12 @@ def create_sampling_ui(pipeline, default_prompt=None):
 
 
 
+    gr.Markdown("**Prompt tips:** Be specific — include genre, instruments, tempo (BPM), mood, and texture. Example: *\"120 BPM house loop, deep sub bass, crispy hi-hats, vinyl crackle\"*")
+
     with gr.Row():
         with gr.Column(scale=6):
-            prompt = gr.Textbox(show_label=False, placeholder="Prompt", value=default_prompt)
-            negative_prompt = gr.Textbox(show_label=False, placeholder="Negative prompt")
+            prompt = gr.Textbox(show_label=False, placeholder="Describe the audio you want: genre, instruments, tempo, mood, texture", value=default_prompt)
+            negative_prompt = gr.Textbox(show_label=False, placeholder="Describe what to avoid (e.g. distortion, vocals, silence)")
         with gr.Column(scale=3):
             with gr.Row():
                 generate_button = gr.Button("Generate", variant='primary', scale=1)
@@ -302,7 +304,7 @@ def create_sampling_ui(pipeline, default_prompt=None):
         with gr.Column():
             with gr.Row(visible = True):
                 # Timing controls
-                seconds_total_slider = gr.Slider(minimum=0, maximum=512, step=1, value=sample_size//sample_rate, label="Seconds total", visible=has_seconds_total)
+                seconds_total_slider = gr.Slider(minimum=0, maximum=512, step=1, value=sample_size//sample_rate, label="Seconds total", visible=has_seconds_total, info="Length of audio to generate. Longer = more VRAM used.")
 
             with gr.Row():
                 # Steps slider
@@ -311,10 +313,10 @@ def create_sampling_ui(pipeline, default_prompt=None):
                 elif is_rf_denoiser:
                     default_steps = 8
 
-                steps_slider = gr.Slider(minimum=1, maximum=500, step=1, value=default_steps, label="Steps")
+                steps_slider = gr.Slider(minimum=1, maximum=500, step=1, value=default_steps, label="Steps", info="Refinement passes. ARC: leave at 8. RF: use ~50. More ≠ always better.")
                 # CFG scale
                 default_cfg_scale = 1.0 if is_rf_denoiser else 7.0
-                cfg_scale_slider = gr.Slider(minimum=0.0, maximum=25.0, step=0.1, value=default_cfg_scale, label="CFG scale")
+                cfg_scale_slider = gr.Slider(minimum=0.0, maximum=25.0, step=0.1, value=default_cfg_scale, label="CFG scale", info="How strictly the model follows your prompt. 1=freestyle, 7=strong adherence, 25+=artifacts likely.")
 
             # Per-LoRA controls (dynamic based on number of loaded LoRAs)
             lora_ui_inputs = []
@@ -322,25 +324,26 @@ def create_sampling_ui(pipeline, default_prompt=None):
                 for i, lora_name in enumerate(lora_names):
                     with gr.Accordion("LoRA {}: {}".format(i + 1, lora_name), open=(i == 0)):
                         with gr.Row():
-                            strength = gr.Slider(minimum=0.0, maximum=10.0, step=0.1, value=1.0, label="strength")
+                            strength = gr.Slider(minimum=0.0, maximum=10.0, step=0.1, value=1.0, label="Strength", info="How much this style patch influences output. 0=off, 1=full, >1=exaggerated.")
                         with gr.Row():
-                            int_min = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, value=0.0, label="Interval min")
-                            int_max = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, value=1.0, label="Interval max")
-                            lyr_filt = gr.Textbox(label="Layer filter", placeholder="")
+                            int_min = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, value=0.0, label="Interval min", info="Start applying at this generation stage. 0=from the beginning.")
+                            int_max = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, value=1.0, label="Interval max", info="Stop applying at this stage. 1=all the way to the end.")
+                            lyr_filt = gr.Textbox(label="Layer filter", placeholder="", info="Target specific model layers. Leave empty for all. Advanced.")
                         lora_ui_inputs.extend([strength, int_min, int_max, lyr_filt])
 
             with gr.Accordion("Sampler params", open=False):
+                gr.Markdown("*Fine-tune how the model builds audio from noise. Defaults work great — only tweak if experimenting.*")
                 with gr.Row():
                     # Seed
-                    seed_textbox = gr.Number(label="Seed (set to -1 for random seed)", value=-1, precision=0)
+                    seed_textbox = gr.Number(label="Seed (set to -1 for random seed)", value=-1, precision=0, info="-1 = random every time. Set a number to reproduce the same result.")
 
-                    cfg_interval_min_slider = gr.Slider(minimum=0.0, maximum=1, step=0.01, value=0.0, label="CFG interval min")
-                    cfg_interval_max_slider = gr.Slider(minimum=0.0, maximum=1, step=0.01, value=1.0, label="CFG interval max")
+                    cfg_interval_min_slider = gr.Slider(minimum=0.0, maximum=1, step=0.01, value=0.0, label="CFG interval min", info="Skip guidance at the noisiest stages. Try 0.2 to reduce artifacts.")
+                    cfg_interval_max_slider = gr.Slider(minimum=0.0, maximum=1, step=0.01, value=1.0, label="CFG interval max", info="Skip guidance at the cleanest stages. Try 0.8 to reduce over-processing.")
 
                 with gr.Row():
-                    cfg_rescale_slider = gr.Slider(minimum=0.0, maximum=1, step=0.01, value=0.0, label="CFG rescale amount")
-                    cfg_norm_threshold = gr.Slider(minimum=0.0, maximum=100, step=0.1, value=0.0, label="CFG norm threshold")
-                    apg_scale_slider = gr.Slider(minimum=0.0, maximum=1.0, step=0.1, value=1.0, label="APG scale", info="1.0=full APG, 0.0=vanilla CFG")
+                    cfg_rescale_slider = gr.Slider(minimum=0.0, maximum=1, step=0.01, value=0.0, label="CFG rescale amount", info="Tames volume/saturation boost from high CFG. Raise if output sounds overblown.")
+                    cfg_norm_threshold = gr.Slider(minimum=0.0, maximum=100, step=0.1, value=0.0, label="CFG norm threshold", info="Caps guidance intensity. Raise if you hear random pops or distortion.")
+                    apg_scale_slider = gr.Slider(minimum=0.0, maximum=1.0, step=0.1, value=1.0, label="APG scale", info="1.0=removes harshness from guidance (recommended). 0.0=raw guidance, may oversaturate.")
 
                 with gr.Row():
                     # Sampler params
@@ -360,11 +363,11 @@ def create_sampling_ui(pipeline, default_prompt=None):
                         sigma_max_max = 1000.0
                         sigma_max_default = 100.0
 
-                    sampler_type_dropdown = gr.Dropdown(sampler_types, label="Sampler type", value=default_sampler_type)
-                    sigma_max_slider = gr.Slider(minimum=0.0, maximum=sigma_max_max, step=0.1, value=sigma_max_default, label="Sigma max", visible=True)
+                    sampler_type_dropdown = gr.Dropdown(sampler_types, label="Sampler type", value=default_sampler_type, info="Algorithm that builds audio. Pingpong=fast+good for ARC. DPM++=quality for RF.")
+                    sigma_max_slider = gr.Slider(minimum=0.0, maximum=sigma_max_max, step=0.1, value=sigma_max_default, label="Sigma max", visible=True, info="Starting noise level. 1.0=from scratch. Lower with init audio=more original preserved.")
 
                 with gr.Row():
-                    duration_padding_slider = gr.Slider(minimum=0.0, maximum=30.0, step=0.5, value=6.0, label="Duration padding (sec)")
+                    duration_padding_slider = gr.Slider(minimum=0.0, maximum=30.0, step=0.5, value=6.0, label="Duration padding (sec)", info="Extra room so reverb tails and decay don't get cut off.")
 
                 def build_dist_shift(shift_type, p1, p2, p3, p4):
                     """Build dist_shift from type + 4 params (meaning depends on type)."""
@@ -383,23 +386,23 @@ def create_sampling_ui(pipeline, default_prompt=None):
                         ["LogSNR", "Flux", "Full", "None"],
                         label="Sampling schedule shift",
                         value=default_dist_shift_type,
-                        info="Distribution shift applied to sampling timesteps"
+                        info="Where the model focuses effort. Leave at default unless output sounds mushy (more) or over-processed (less)."
                     )
                 with gr.Row(visible=(is_rf or is_rf_denoiser) and default_dist_shift_type == "LogSNR") as logsnr_params_row:
-                    logsnr_anchor_length_slider = gr.Slider(minimum=100, maximum=10000, step=100, value=default_logsnr_params["anchor_length"], label="Anchor length")
-                    logsnr_anchor_logsnr_slider = gr.Slider(minimum=-12.0, maximum=0.0, step=0.1, value=default_logsnr_params["anchor_logsnr"], label="Anchor log-SNR")
-                    logsnr_rate_slider = gr.Slider(minimum=-2.0, maximum=2.0, step=0.1, value=default_logsnr_params["rate"], label="Rate")
-                    logsnr_end_slider = gr.Slider(minimum=-2.0, maximum=6.0, step=0.1, value=default_logsnr_params["logsnr_end"], label="log-SNR end")
+                    logsnr_anchor_length_slider = gr.Slider(minimum=100, maximum=10000, step=100, value=default_logsnr_params["anchor_length"], label="Anchor length", info="Reference sequence length for the shift curve")
+                    logsnr_anchor_logsnr_slider = gr.Slider(minimum=-12.0, maximum=0.0, step=0.1, value=default_logsnr_params["anchor_logsnr"], label="Anchor log-SNR", info="How much effort on structure-forming stages")
+                    logsnr_rate_slider = gr.Slider(minimum=-2.0, maximum=2.0, step=0.1, value=default_logsnr_params["rate"], label="Rate", info="How quickly shift scales with duration")
+                    logsnr_end_slider = gr.Slider(minimum=-2.0, maximum=6.0, step=0.1, value=default_logsnr_params["logsnr_end"], label="log-SNR end", info="Where the shift tapers off")
                 with gr.Row(visible=(is_rf or is_rf_denoiser) and default_dist_shift_type == "Flux") as flux_params_row:
-                    flux_min_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_flux_params["min_length"], label="Min seq len")
-                    flux_max_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_flux_params["max_length"], label="Max seq len")
-                    flux_alpha_min_slider = gr.Slider(minimum=0.1, maximum=20.0, step=0.1, value=default_flux_params["alpha_min"], label="Alpha min")
-                    flux_alpha_max_slider = gr.Slider(minimum=0.1, maximum=20.0, step=0.1, value=default_flux_params["alpha_max"], label="Alpha max")
+                    flux_min_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_flux_params["min_length"], label="Min seq len", info="Shortest sequence the shift is calibrated for")
+                    flux_max_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_flux_params["max_length"], label="Max seq len", info="Longest sequence the shift is calibrated for")
+                    flux_alpha_min_slider = gr.Slider(minimum=0.1, maximum=20.0, step=0.1, value=default_flux_params["alpha_min"], label="Alpha min", info="Shift strength at short durations")
+                    flux_alpha_max_slider = gr.Slider(minimum=0.1, maximum=20.0, step=0.1, value=default_flux_params["alpha_max"], label="Alpha max", info="Shift strength at long durations")
                 with gr.Row(visible=(is_rf or is_rf_denoiser) and default_dist_shift_type == "Full") as full_params_row:
-                    full_base_shift_slider = gr.Slider(minimum=0.0, maximum=5.0, step=0.05, value=default_full_params["base_shift"], label="Base shift")
-                    full_max_shift_slider = gr.Slider(minimum=0.0, maximum=5.0, step=0.05, value=default_full_params["max_shift"], label="Max shift")
-                    full_min_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_full_params["min_length"], label="Min length")
-                    full_max_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_full_params["max_length"], label="Max length")
+                    full_base_shift_slider = gr.Slider(minimum=0.0, maximum=5.0, step=0.05, value=default_full_params["base_shift"], label="Base shift", info="Minimum shift at short sequences")
+                    full_max_shift_slider = gr.Slider(minimum=0.0, maximum=5.0, step=0.05, value=default_full_params["max_shift"], label="Max shift", info="Maximum shift at long sequences")
+                    full_min_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_full_params["min_length"], label="Min length", info="Sequence length where base_shift applies")
+                    full_max_length_slider = gr.Slider(minimum=1, maximum=10000, step=1, value=default_full_params["max_length"], label="Max length", info="Sequence length where max_shift applies")
 
                 # Per-type slider groups for wiring to state
                 logsnr_sliders = [logsnr_anchor_length_slider, logsnr_anchor_logsnr_slider, logsnr_rate_slider, logsnr_end_slider]
@@ -429,19 +432,21 @@ def create_sampling_ui(pipeline, default_prompt=None):
             batch_size_state = gr.State(value=1)
 
             with gr.Accordion("Output params", open=False):
+                gr.Markdown("*Control file format, naming, and playback behavior.*")
                 # Output params
                 with gr.Row():
-                    file_format_dropdown = gr.Dropdown(["wav", "flac", "mp3 320k", "mp3 v0", "mp3 128k", "m4a aac_he_v2 64k", "m4a aac_he_v2 32k"], label="File format", value="wav")
-                    file_naming_dropdown = gr.Dropdown(["verbose", "prompt", "output.wav"], label="File naming", value="verbose") # ,"prompt","verbose"
-                    preview_every_slider = gr.Slider(minimum=0, maximum=100, step=1, value=0, label="Spec Preview Every")
+                    file_format_dropdown = gr.Dropdown(["wav", "flac", "mp3 320k", "mp3 v0", "mp3 128k", "m4a aac_he_v2 64k", "m4a aac_he_v2 32k"], label="File format", value="wav", info="WAV=lossless master, FLAC=lossless smaller, MP3 320k=near-perfect lossy")
+                    file_naming_dropdown = gr.Dropdown(["verbose", "prompt", "output.wav"], label="File naming", value="verbose", info="Verbose=prompt+settings+seed in filename. Best for tracking experiments.") # ,"prompt","verbose"
+                    preview_every_slider = gr.Slider(minimum=0, maximum=100, step=1, value=0, label="Spec Preview Every", info="Show a visual snapshot every N steps. 0=disabled.")
 
-                    cut_to_seconds_total_checkbox = gr.Checkbox(label="Cut to seconds total", value=True)
-                    autoplay_checkbox = gr.Checkbox(label="Autoplay", value=False, elem_id="autoplay")
-                    infinite_radio_checkbox = gr.Checkbox(label="Infinite Radio", value=False, elem_id="infinite-radio")
-                    automatic_download_checkbox = gr.Checkbox(label="Auto Download", value=False, elem_id="automatic-download")
+                    cut_to_seconds_total_checkbox = gr.Checkbox(label="Cut to seconds total", value=True, info="Trim output to exactly your requested duration.")
+                    autoplay_checkbox = gr.Checkbox(label="Autoplay", value=False, elem_id="autoplay", info="Play audio automatically when generation finishes.")
+                    infinite_radio_checkbox = gr.Checkbox(label="Infinite Radio", value=False, elem_id="infinite-radio", info="Auto-generate new tracks endlessly, back-to-back.")
+                    automatic_download_checkbox = gr.Checkbox(label="Auto Download", value=False, elem_id="automatic-download", info="Save each generation to downloads automatically.")
 
             # Default generation tab
             with gr.Accordion("Init audio", open=False):
+                gr.Markdown("*Upload a recording as a starting point. The model transforms it based on your prompt. Lower noise level = more of the original preserved.*")
                 init_audio_input = gr.Audio(label="Init audio", waveform_options=gr.WaveformOptions(show_recording_waveform=False))
                 min_noise_level = 0.01
                 max_noise_level = 1.0
@@ -453,11 +458,11 @@ def create_sampling_ui(pipeline, default_prompt=None):
 
                 init_audio_type_radio = gr.Radio(label="Techniques", choices=choices, value=choices[0], visible=len(choices)>1)
                 with gr.Column(visible=True) as interface_a:
-                    init_noise_level_slider = gr.Slider(minimum=min_noise_level, maximum=max_noise_level, step=0.01, value=default_noise_level, label="Init noise level")
+                    init_noise_level_slider = gr.Slider(minimum=min_noise_level, maximum=max_noise_level, step=0.01, value=default_noise_level, label="Init noise level", info="0.1=subtle remix, 0.5=loose cover, 0.9=heavy transformation, 1.0=original ignored")
                 with gr.Column(visible=False) as interface_b:
-                    inversion_steps_slider = gr.Slider(minimum=1, maximum=500, step=1, value=100, label="Inversion Steps")
-                    inversion_gamma_slider = gr.Slider(minimum=0, maximum=1, step=0.1, value=0, label="Gamma", visible=True)
-                    inversion_unconditional_checkbox = gr.Checkbox(label="Unconditional", value=False)
+                    inversion_steps_slider = gr.Slider(minimum=1, maximum=500, step=1, value=100, label="Inversion Steps", info="How carefully the model analyzes your input. More=faithful to source structure.")
+                    inversion_gamma_slider = gr.Slider(minimum=0, maximum=1, step=0.1, value=0, label="Gamma", visible=True, info="Creative freedom. 0=faithful, 0.3=slight liberty, 1.0=maximum reinterpretation.")
+                    inversion_unconditional_checkbox = gr.Checkbox(label="Unconditional", value=False, info="Ignore prompt during analysis. Cleaner separation between structure and style.")
                     gr.HTML("<div style='opacity: 0.5; padding: 0px'>For reproduction, try empty prompt, cfg 1, gamma .3<br>\
                         For prompt re-stylization, try cfg 1-7, gamma 0-.15, unconditional</div>")
                 def init_audio_type_switch(choice):
@@ -468,9 +473,10 @@ def create_sampling_ui(pipeline, default_prompt=None):
                 init_audio_type_radio.change(init_audio_type_switch, inputs=init_audio_type_radio, outputs=[interface_a, interface_b])
 
             with gr.Accordion("Inpainting", open=False):
+                gr.Markdown("*Regenerate a specific time region while keeping everything else. For continuation: set Mask Start to end of your audio and increase Seconds Total.*")
                 inpaint_audio_input = gr.Audio(label="Inpaint audio", waveform_options=gr.WaveformOptions(show_recording_waveform=False))
-                mask_maskstart_slider = gr.Slider(minimum=0.0, maximum=sample_size//sample_rate, step=0.1, value=0, label="Mask Start (sec)")
-                mask_maskend_slider = gr.Slider(minimum=0.0, maximum=sample_size//sample_rate, step=0.1, value=sample_size//sample_rate, label="Mask End (sec)")
+                mask_maskstart_slider = gr.Slider(minimum=0.0, maximum=sample_size//sample_rate, step=0.1, value=0, label="Mask Start (sec)", info="Where the region to regenerate begins. Everything before is preserved.")
+                mask_maskend_slider = gr.Slider(minimum=0.0, maximum=sample_size//sample_rate, step=0.1, value=sample_size//sample_rate, label="Mask End (sec)", info="Where the region to regenerate ends. Everything after is preserved.")
 
                 # Update inpainting slider ranges when seconds_total changes.
                 # Only seconds_total is an input — reading the mask sliders here would cause

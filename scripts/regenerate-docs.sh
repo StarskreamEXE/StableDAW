@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Regenerate user-facing docs.
+#
+# - Sync docs/USER_GUIDE.md to frontend/public/USER_GUIDE.md (Vite serves it for the in-app modal).
+# - Verify the frontend builds with the current docs payload.
+# - Optionally run Playwright screenshots if Playwright is installed AND the dev server is up.
+# - Stage all updated files so a single `git commit` picks them up.
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+log()  { printf '\033[1;35m[docs]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[docs]\033[0m %s\n' "$*"; }
+err()  { printf '\033[1;31m[docs]\033[0m %s\n' "$*" >&2; }
+
+src="docs/USER_GUIDE.md"
+dest="frontend/public/USER_GUIDE.md"
+
+if [[ ! -f "$src" ]]; then
+  err "Source guide missing: $src"
+  exit 1
+fi
+
+# 1. Sync the guide so the UI modal serves the canonical version.
+log "Syncing $src → $dest"
+mkdir -p "$(dirname "$dest")"
+cp "$src" "$dest"
+
+# 2. Frontend build (catches markdown that breaks the modal's renderer).
+log "Building frontend"
+( cd frontend && npx --no vite build >/dev/null 2>&1 ) || {
+  err "Frontend build failed — fix before committing."
+  exit 2
+}
+
+# 3. Optional Playwright screenshots — only if all preconditions hold.
+screenshot_script="scripts/screenshots/take-screenshots.mjs"
+if [[ -f "$screenshot_script" ]] && \
+   ( cd frontend && [[ -d node_modules/playwright || -d node_modules/@playwright/test ]] ); then
+  if curl -s -m 2 http://localhost:5173 >/dev/null 2>&1; then
+    log "Dev server up — taking Playwright screenshots"
+    ( cd frontend && node "../$screenshot_script" ) || \
+      warn "Screenshot script exited non-zero. Continuing."
+  else
+    warn "Dev server not running on :5173 — skipping screenshots."
+  fi
+else
+  warn "Playwright not installed — skipping screenshots. (Run: cd frontend && npm i -D playwright && npx playwright install chromium)"
+fi
+
+# 4. Stage all the files the regen step touches.
+log "Staging docs changes"
+git add docs/USER_GUIDE.md frontend/public/USER_GUIDE.md 2>/dev/null || true
+if [[ -d docs/UI/screenshots ]]; then
+  git add docs/UI/screenshots 2>/dev/null || true
+fi
+
+log "Done."
