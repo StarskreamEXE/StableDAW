@@ -1,6 +1,45 @@
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
+
+
+def _local_search_dirs() -> list[Path]:
+    """Directories to search for locally-cloned model repos, in priority order.
+
+    Sources: SA3_LOCAL_MODELS_DIR env var, then `local_models.txt` (one path per
+    line) in the project root, then a built-in fallback list.
+    """
+    dirs: list[Path] = []
+    env = os.environ.get("SA3_LOCAL_MODELS_DIR")
+    if env:
+        dirs.extend(Path(p) for p in env.split(os.pathsep) if p)
+
+    project_root = Path(__file__).resolve().parents[1]
+    cfg_file = project_root / "local_models.txt"
+    if cfg_file.is_file():
+        for line in cfg_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                dirs.append(Path(line))
+
+    return dirs
+
+
+def _local_override(repo_id: str, filename: str) -> str | None:
+    """Look for `<base>/<repo_name>/<filename>` in each configured local dir.
+
+    e.g. `<base>/stable-audio-3-medium/stable-audio-3-medium-ARC.safetensors`.
+    Returns the absolute path if found, else None.
+    """
+    repo_name = repo_id.split("/", 1)[-1]
+    for base in _local_search_dirs():
+        candidate = base / repo_name / filename
+        if candidate.is_file():
+            print(f"[stable_audio_3] using local model file: {candidate}")
+            return str(candidate)
+    return None
 
 
 @dataclass(frozen=True)
@@ -10,9 +49,13 @@ class ModelConfig:
     ckpt_path: str
 
     def resolve(self):
-        """Download files from HuggingFace Hub and return local cached paths."""
-        local_config = hf_hub_download(repo_id=self.repo_id, filename=self.config_path)
-        local_ckpt = hf_hub_download(repo_id=self.repo_id, filename=self.ckpt_path)
+        """Return local paths for config + checkpoint. Prefer SA3_LOCAL_MODELS_DIR if set, else HF Hub."""
+        local_config = _local_override(self.repo_id, self.config_path) or hf_hub_download(
+            repo_id=self.repo_id, filename=self.config_path
+        )
+        local_ckpt = _local_override(self.repo_id, self.ckpt_path) or hf_hub_download(
+            repo_id=self.repo_id, filename=self.ckpt_path
+        )
         return local_config, local_ckpt
 
 

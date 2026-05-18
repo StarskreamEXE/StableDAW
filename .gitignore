@@ -168,3 +168,11 @@ wandb/*
 .DS_Store
 *.safetensors
 .claude
+# Custom ignores
+repomix-output.md
+*.bak-*
+.playwright-mcp/
+.serena/
+local_models.txt
+grafting_day/frontend-graft-manifest.json
+frontend.bak*/
