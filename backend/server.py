@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+import io
 from pathlib import Path
 from typing import Optional
 
