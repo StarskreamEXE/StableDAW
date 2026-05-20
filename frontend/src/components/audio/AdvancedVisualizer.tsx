@@ -165,7 +165,7 @@ export const AdvancedVisualizer: React.FC = () => {
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
         {/* Overlay HUD */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1 opacity-70 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="absolute top-1 left-2 flex flex-col gap-1 opacity-70 group-hover:opacity-100 transition-opacity pointer-events-none">
           <div className="flex items-center gap-2 bg-black/60 px-1.5 py-0.5 rounded border border-white/5">
             <Zap className="w-2.5 h-2.5 text-yellow-500" />
             <span className="text-[7px] font-mono text-zinc-400 tabular-nums">
