@@ -670,8 +670,7 @@ async def generate(
     init_audio_tuple = None
     if init_audio is not None and init_audio.filename:
         init_audio_tuple = await _load_audio_upload(init_audio)
-
-    normalized_init_audio_type = _validate_init_audio_mode(
+    (
         init_audio_type,
         has_init_audio=init_audio_tuple is not None,
     )
