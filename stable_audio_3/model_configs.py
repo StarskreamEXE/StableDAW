@@ -1,8 +1,11 @@
 import os
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
+
+logger = logging.getLogger(__name__)
 
 
 def _local_search_dirs() -> list[Path]:
@@ -53,7 +56,7 @@ def _local_override(repo_id: str, filename: str) -> str | None:
         for name in alt_filenames:
             candidate = base / repo_name / name
             if candidate.is_file():
-                print(f"[stable_audio_3] using local model file: {candidate}")
+                logger.info("Using local model file: %s", candidate)
                 return str(candidate)
     return None
 
@@ -66,7 +69,7 @@ def resolve_local_repo_path(repo_id: str, subfolder: str | None = None) -> str |
         if subfolder:
             candidate = candidate / subfolder
         if candidate.is_dir():
-            print(f"[stable_audio_3] using local repo path: {candidate}")
+            logger.info("Using local repo path: %s", candidate)
             return str(candidate)
     return None
 

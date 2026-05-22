@@ -14,6 +14,7 @@ import { registerEditorPlayback, unregisterEditorPlayback } from '../../state/ed
 
 const TRACK_HEADER_PX = 180;
 const TRACK_HEIGHT = 88;
+const DECODE_TIMEOUT_MS = 15000;
 
 const formatTimecode = (sec: number): string => {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -327,7 +328,7 @@ export const WaveformEditor: React.FC<{ onSwitchTab?: (tab: string) => void }> =
             const decoded = await Promise.race([
               decodeCtx.decodeAudioData(ab.slice(0)),
               new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('decodeAudioData timeout')), 15000),
+                setTimeout(() => reject(new Error('decodeAudioData timeout')), DECODE_TIMEOUT_MS),
               ),
             ]);
             blobCache.set(clip.audioBlob, decoded);
@@ -572,7 +573,7 @@ export const WaveformEditor: React.FC<{ onSwitchTab?: (tab: string) => void }> =
             const decoded = await Promise.race([
               decodeCtx.decodeAudioData(ab.slice(0)),
               new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('decodeAudioData timeout')), 15000),
+                setTimeout(() => reject(new Error('decodeAudioData timeout')), DECODE_TIMEOUT_MS),
               ),
             ]);
             blobCache.set(c.audioBlob, decoded);
