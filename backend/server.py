@@ -32,6 +32,7 @@ matplotlib.use('Agg')
 
 from matplotlib.figure import Figure
 from PIL import Image
+from backend.assistant_routes import router as assistant_router
 
 from stable_audio_3.inference.distribution_shift import (
     LogSNRShift,
@@ -670,9 +671,9 @@ async def generate(
     init_audio_tuple = None
     if init_audio is not None and init_audio.filename:
         init_audio_tuple = await _load_audio_upload(init_audio)
-    (
+    init_audio_type = _validate_init_audio_mode(
         init_audio_type,
-        has_init_audio, init_audio_tuple is not None,
+        has_init_audio=init_audio_tuple is not None,
     )
 
     # Load inpaint audio if provided
@@ -1399,6 +1400,4 @@ async def studio_process(
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-
-from backend.assistant_routes import router as assistant_router
 app.include_router(assistant_router)
