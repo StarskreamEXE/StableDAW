@@ -1,10 +1,10 @@
 {
-  "name": "react-example",
+  "name": "stabledaw-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host=0.0.0.0",
+    "dev": "vite --port=5173 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
